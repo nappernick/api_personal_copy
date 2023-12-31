@@ -1,0 +1,113 @@
+org: raesapigateway
+app: api-gateway
+service: api-gateway
+frameworkVersion: '3'
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-plugin-optimize
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1 # Replace with your AWS region
+  environment:
+    dbuacme_apidev_HOST: ${ssm:/path/to/your/DB_HOST~true}     # Secure your credentials using AWS SSM
+    dbuacme_apidev_NAME: ${ssm:/path/to/your/DB_NAME~true}
+    dbuacme_apidev_USER: ${ssm:/path/to/your/DB_USER~true}
+    dbuacme_apidev_PASSWORD: ${ssm:/path/to/your/DB_PASSWORD~true}
+  vpc:  # Add this to configure Lambdas to access your VPC
+    securityGroupIds:
+      - sg-xxxxxxx
+    subnetIds:
+      - subnet-xxxxxx
+      - subnet-yyyyyy
+  iamRoleStatements: # Define IAM Role permissions for Lambda
+    - Effect: "Allow"
+      Action:
+        - "rds-db:connect"
+        - "rds:*"
+      Resource:
+        - "arn:aws:rds:us-east-1:123456789012:db:your-db-instance"
+
+package:
+  individually: true
+  exclude:
+    - node_modules/**
+    - resources/**
+
+functions:
+  leads-lambda:
+    handler: ./src/Lambdas/leads-lambda.handler
+    events:
+      - http:
+          path: leads/{userId}
+          method: get
+    # Removed 'runtime', 'memorySize', 'timeout', 'package' since they're defined on provider level and avoid redundancy
+
+  invoices-lambda:
+    handler: ./src/Lambdas/invoices-lambda.handler
+    events:
+      - http:
+          path: invoices/{userId}
+          method: get
+
+  users-lambda:
+    handler: ./src/Lambdas/users-lambda.handler
+    events:
+      - http:
+          path: users
+          method: get
+
+  resources:
+  Resources:
+    PhotosBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: my-photos-bucket # Change this to a unique bucket name
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - "*" # Adjust this to match your mobile app's domain for security
+              AllowedMethods:
+                - "PUT"
+              AllowedHeaders:
+                - "*"
+
+    PhotosBucketPolicy: # Optional: Define a policy if you want to fine-tune access permissions
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: 
+          Ref: PhotosBucket
+        PolicyDocument:
+          Statement:
+            - Effect: "Allow"
+              Principal: "*"
+              Action:
+                - "s3:PutObject"
+              Resource:
+                Fn::Join:
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - Ref: PhotosBucket
+                    - '/*'
+
+resources:
+  Resources:
+    ApiGatewayUsagePlan: # Define a Usage Plan for your API Gateway
+      Type: AWS::ApiGateway::UsagePlan
+      Properties:
+        UsagePlanName: "MyAPIUsagePlan"
+        Description: "Usage plan for the API Gateway"
+        ApiStages:
+        - ApiId: Ref: ApiGatewayRestApi
+          Stage: ${self:provider.stage}
+        Quota:
+          Limit: 100
+          Period: MONTH
+        Throttle:
+          BurstLimit: 10
+          RateLimit: 1
+
+# ... Add more resources such as DynamoDB tables, S3 buckets, etc. as needed ...

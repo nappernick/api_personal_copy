@@ -1,0 +1,9 @@
+Connection details to your database acme-test
+
+Learn about connecting to your database 
+Master username
+raestestadmin
+Manage master credentials in AWS Secrets Manager
+Manage Credentials 
+Endpoint
+acme-test.c9igrwgeoj2u.us-east-1.rds.amazonaws.com
